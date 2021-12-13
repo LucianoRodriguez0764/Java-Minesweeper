@@ -40,23 +40,23 @@ class GameFrame extends JFrame {
 	GamePanel gamePanel = new GamePanel(this); 
 	ImageIcon minesweeperIcon = new ImageIcon(getClass().getResource("/minesweepericon2.0.png"));
 	Thread thread = new Thread(new Rendering(this)); 
-	MouseKeys mouseKeys = new MouseKeys(this);
 	static boolean winTheGame = false;
+	MouseKeys mouseKeys = new MouseKeys(this);
+
 	
 	public GameFrame() {
 		
-		setTitle("BuscaMinas 0.1");
+		setTitle("BuscaMinas 0.7");
 		setBounds(200, 150, 800, 600);
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
 		setIconImage(minesweeperIcon.getImage());
 		
 		add(this.gamePanel);
+		addMouseListener(this.mouseKeys);
 		
 		setVisible(true);
 		setResizable(false);
-		
-		addMouseListener(mouseKeys);
-		
+				
 		thread.start();
 
 		
@@ -106,13 +106,12 @@ class GamePanel extends JPanel {
 	
 	byte gameWidth;
 	byte gameHeight;
+	static int BOMBS_QUANTITY; 
+	static int[] BOMBS_LOCATIONS;
 
 	JLabel coords = new JLabel("Good Luck!");
 	JLabel cheat = new JLabel();
 	JButton again = new JButton("Play Again!");
-	
-	static short bombQuantity = 0;
-
 	
 	int coordX, coordY;
 	byte[] allCubeStatus;
@@ -122,8 +121,10 @@ class GamePanel extends JPanel {
 		setLayout(null);
 		setBounds(200, 150, 800, 600);
 		setBackground(new Color(100,100,100));
-		this.gameWidth  = 20;
-		this.gameHeight = 15;
+		this.gameWidth  = 10;
+		this.gameHeight = 10;
+		this.BOMBS_QUANTITY = 10;
+		this.BOMBS_LOCATIONS = new int[BOMBS_QUANTITY]; 
 		this.allCubeStatus = new byte[gameWidth*gameHeight];
 		this.gameFrame = gameFrame;
 		
@@ -168,7 +169,7 @@ class GamePanel extends JPanel {
 		}
 		
 		
-		if(k==bombQuantity) {
+		if(k==BOMBS_QUANTITY) {
 			coords.setText("YOU WIN");
 			imageState=4;
 			return true;
@@ -181,28 +182,88 @@ class GamePanel extends JPanel {
 
 	void resetGame() {
 		
-		byte j;
-		bombQuantity=0;
+		int j;
+		boolean isSame = false;
 		GamePanel.imageState = 1;
 		cheat.setText("");
 		
-		allCubeStatus[0]=9;
-		bombQuantity++;
+		for(int k=0; k<allCubeStatus.length; k++) {
+			
+			allCubeStatus[k] = 0;
+			
+		}
 		
-		for(int i=1; i< allCubeStatus.length; i++) {
-			
-			j = (byte)(rnd.nextInt(10));
-			
-			if (bombQuantity==2 && j==9) {
-			j--;
-			}
-			
-			allCubeStatus[i]=j;
+		
+		
+//		for(int k=0; k<BOMBS_LOCATION.length; k++) {
+//			
+//			BOMBS_LOCATION[k] = -1;
+//			
+//		}
+		
 
-			if (j==9) bombQuantity++;
+				
+		for(int i=0; i<BOMBS_QUANTITY; i++) {
+			
+			do {
+				
+			j = rnd.nextInt(gameHeight*gameWidth);
+			isSame = false;
+			
+			for(int k=0; k<BOMBS_LOCATIONS.length; k++) {
+				if (j == BOMBS_LOCATIONS[k]) { 
+					isSame = true;
+					break;
+				}
+			}
+			} while(isSame);
+			
+			allCubeStatus[j] = 9;
+			BOMBS_LOCATIONS[i] = j;
 			
 			
 		}	
+		
+		setTheCorrectNumbers();
+		
+	}
+
+	private void setTheCorrectNumbers() {
+		
+		int bombId;
+		int neighbor;
+
+		for(int k=0; k<BOMBS_LOCATIONS.length; k++) {
+			
+			bombId = BOMBS_LOCATIONS[k];
+			
+			for(int i=-1; i<= 1; i++) {
+			for(int j=-1; j<= 1; j++) {
+					
+				neighbor = (bombId + i + j*gameWidth); 
+				
+				if(!(neighbor == bombId || neighbor < 0 || neighbor > (gameWidth*gameHeight-1) )) {
+					if(allCubeStatus[neighbor]!=9) {
+						
+						
+					if(!(i==1 && (bombId%gameWidth == gameWidth-1)) &&
+						!(i==-1 && (bombId%gameWidth == 0))) {	
+						
+					allCubeStatus[neighbor]++;
+					}
+					}
+				}
+					
+			}		
+			}
+			
+			
+			
+			
+			
+			
+		}
+		
 	}
 
 	public void paintComponent(Graphics g) {
@@ -233,8 +294,8 @@ class GamePanel extends JPanel {
 				
 		for(int i=0; i< allCubeStatus.length; i++) {
 			
-			coordX = (i%20)*30;
-			coordY = (i/20)*30;
+			coordX = (i% gameWidth)*30;
+			coordY = (i/ gameWidth)*30;
 						
 			switch (allCubeStatus[i]) {
 			
@@ -373,11 +434,29 @@ class MouseKeys implements MouseListener{
 	int coordY;
 	int cubeId;
 	public boolean weAreAlive = true;
+	static int[] WHITE_IDS;
+	int id_iterator = 0;
 	
 	
 	public MouseKeys(GameFrame gameFrame) {
 		this.gameFrame=gameFrame;
 		this.gamePanel=gameFrame.gamePanel;
+		WHITE_IDS = new int[gamePanel.gameHeight*gamePanel.gameWidth];
+		
+		for(int i=0; i<WHITE_IDS.length; i++) {
+			WHITE_IDS[i] = -1;
+		}
+		
+		
+	}
+	
+	private void kills() {
+
+		GamePanel.imageState = 2;
+		weAreAlive=false;
+		gamePanel.setVisibleBombs();
+		gamePanel.coords.setText("Death");
+		
 	}
 
 	@Override
@@ -394,6 +473,12 @@ class MouseKeys implements MouseListener{
 		coordX = e.getX()-8;
 		coordY = e.getY()-30;
 		cubeId = coordX/30 + gamePanel.gameWidth*(coordY/30);
+		
+		
+		if(e.isShiftDown() && e.isControlDown() && e.isAltDown() /*&& e.isAltGraphDown()*/) {
+			System.out.print(GamePanel.revealStatus(gamePanel.allCubeStatus[cubeId]) +" ");
+			gamePanel.cheat.setText(GamePanel.revealStatus(gamePanel.allCubeStatus[cubeId]));
+			}
 		
 		
 		
@@ -431,9 +516,9 @@ class MouseKeys implements MouseListener{
 		
 //		gamePanel.setBackground(new Color(50,50,50));
 		
-		if(!(coordX/30 > 19 || coordY/30 > 14) && weAreAlive
+		if(!(coordX/30 >= gamePanel.gameWidth || coordY/30 >= gamePanel.gameHeight) && weAreAlive
 			&& !GameFrame.winTheGame	) {
-		if(!((e.getX()-8)/30 > 19 || (e.getY()-30)/30 > 14))
+		if(!((e.getX()-8)/30 >= gamePanel.gameWidth || (e.getY()-30)/30 >= gamePanel.gameHeight))
 			gamePanel.coords.setText(String.format("(%s, %s)", coordX/30 +1,coordY/30 +1));
 
 				
@@ -455,43 +540,54 @@ class MouseKeys implements MouseListener{
 		if(gamePanel.allCubeStatus[cubeId] == 9) {
 			
 			gamePanel.allCubeStatus[cubeId] = -1;
-			GamePanel.imageState = 2;
-			weAreAlive=false;
-			gamePanel.setVisibleBombs();
-			gamePanel.coords.setText("Death");
+			kills();
 
 
 		} else
 		
 		// A incognito clicked being showed
-		if(gamePanel.allCubeStatus[cubeId] >= 30 && gamePanel.allCubeStatus[cubeId] <= 39) {
-				
+		if(gamePanel.allCubeStatus[cubeId] >= 30 && gamePanel.allCubeStatus[cubeId] <= 38) {
+			
+			if(!((e.getX()-8)/30 >= gamePanel.gameWidth || (e.getY()-30)/30 >= gamePanel.gameHeight)) {
 			gamePanel.allCubeStatus[cubeId] -= 10;
-							
-		} else 
+			}
+		} else
+			
+		if(gamePanel.allCubeStatus[cubeId] == 39) {
+			
+			if(!((e.getX()-8)/30 >= gamePanel.gameWidth || (e.getY()-30)/30 >= gamePanel.gameHeight)) {
+			gamePanel.allCubeStatus[cubeId] = -1;
+			kills();
+			}
+		} else
 		
 		// Is being "click-keeped"
 		if(gamePanel.allCubeStatus[cubeId] >= 40 && gamePanel.allCubeStatus[cubeId] <= 48) {
 			
 			// Si el click se released fuera del margen, se cancela
-			if((e.getX()-8)/30 > 19 || (e.getY()-30)/30 > 14)
+			if((e.getX()-8)/30 >= gamePanel.gameWidth || (e.getY()-30)/30 >= gamePanel.gameHeight)
 				gamePanel.allCubeStatus[cubeId] -= 40;
-			else
+			else {
+				
+				if(gamePanel.allCubeStatus[cubeId]==40) {
+					showWhites(cubeId);
+				} else {
+				
 				gamePanel.allCubeStatus[cubeId] -= 20;
+				}
+			}
 			
 		} else
 			
 		if(gamePanel.allCubeStatus[cubeId] == 49) {
 				
-			if((e.getX()-8)/30 > 19 || (e.getY()-30)/30 > 14)
+			if((e.getX()-8)/30 >= gamePanel.gameWidth || (e.getY()-30)/30 >= gamePanel.gameHeight)
 				gamePanel.allCubeStatus[cubeId] -= 40;
 			else {	
 			
 			gamePanel.allCubeStatus[cubeId] = -1;
-			GamePanel.imageState = 2;
-			weAreAlive=false;
-			gamePanel.setVisibleBombs();
-			gamePanel.coords.setText("Death");
+			kills();
+			
 			}
 				
 		}
@@ -535,15 +631,58 @@ class MouseKeys implements MouseListener{
 //		}
 		 
 		 
-		if(e.isShiftDown() && e.isControlDown() && e.isAltDown() /*&& e.isAltGraphDown()*/) {
-		System.out.print(GamePanel.revealStatus(gamePanel.allCubeStatus[cubeId]) +" ");
-		gamePanel.cheat.setText(GamePanel.revealStatus(gamePanel.allCubeStatus[cubeId]));
-		}
+//		if(e.isShiftDown() && e.isControlDown() && e.isAltDown() /*&& e.isAltGraphDown()*/) {
+//		System.out.print(GamePanel.revealStatus(gamePanel.allCubeStatus[cubeId]) +" ");
+//		gamePanel.cheat.setText(GamePanel.revealStatus(gamePanel.allCubeStatus[cubeId]));
+//		}
 		System.out.print(String.format("(%s, %s)", coordX,coordY));
 		System.out.println("  " + (coordX/30 +1) + "--" + (coordY/30 +1));
 
 		
 		
+		}
+		
+	}
+
+	
+
+	private void showWhites(int cubeId) {
+		
+		System.out.println("SHOULD SHOW WHITES");	
+		
+		int neighbor;
+		
+		
+		for(int i=-1; i<= 1; i++) {
+			for(int j=-1; j<= 1; j++) {
+					
+				neighbor = (cubeId + i + j*gamePanel.gameWidth); 
+				
+				if(!(neighbor == cubeId || neighbor < 0 || neighbor > (gamePanel.gameWidth*gamePanel.gameHeight-1) )) {
+					
+					if( gamePanel.allCubeStatus[neighbor] >= 0 && gamePanel.allCubeStatus[neighbor] <= 9 ) {
+						
+						
+					if(!(i==1 && (cubeId%gamePanel.gameWidth == gamePanel.gameWidth-1)) &&
+						!(i==-1 && (cubeId%gamePanel.gameWidth == 0))) {	
+						
+						System.out.println("NEIGHBOR: "+neighbor+" , STATUS:  "+gamePanel.allCubeStatus[neighbor]);
+						
+						if(gamePanel.allCubeStatus[neighbor] == 0 ) {
+							WHITE_IDS[id_iterator] = neighbor;
+							id_iterator++;
+						}
+						
+						gamePanel.allCubeStatus[neighbor] += 20;
+						
+						
+						
+						
+					}}}}}
+					
+		for(int i=0; i<WHITE_IDS.length; i++) {
+			if(WHITE_IDS[i] == -1) break;
+			System.out.println(WHITE_IDS[i]);
 		}
 		
 	}
